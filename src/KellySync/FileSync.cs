@@ -99,7 +99,7 @@ namespace KellySync
         }
 
         private void SyncFile(string a, string b) {
-
+            throw new NotImplementedException();
         }
 
         private void OnLocalFileEvent( object sender, FileSystemEventArgs args ) {
