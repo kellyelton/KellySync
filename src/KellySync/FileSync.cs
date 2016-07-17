@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -23,7 +22,7 @@ namespace KellySync
         private Task _scanTask;
         private string _filter;
 
-        private System.Collections.Generic.Dictionary<string, WatcherChangeTypes> _inProgress;
+        private Dictionary<string, WatcherChangeTypes> _inProgress;
 
 
         private static readonly string HomePath = Environment.ExpandEnvironmentVariables(@"%USERPROFILE%");
@@ -89,16 +88,29 @@ namespace KellySync
                     while (en.MoveNext() && !cancel.IsCancellationRequested) {
                         // TODO: actually do scanning on file
                         var path = en.Current;
-
-                        SyncFile(path, GetOppositePath(path, _isDirectory));
+						var opath = GetOppositePath(path, _isDirectory);
+						lock (this._inProgress) {
+							// This way we don't tickle files that are being moved
+							if (this._inProgress.ContainsKey(path) || this._inProgress.ContainsKey(opath)) continue;
+							SyncFile(path, GetOppositePath(path, _isDirectory));
+						}
                         Task.Delay(100, cancel);
                     }
                 }
-                Task.Delay(60000, cancel);
+                Task.Delay(30000, cancel);
             }
         }
 
         private void SyncFile(string a, string b) {
+			if(!File.Exists(a) && File.Exists(b)) {
+				File.Copy(b, a);
+				return;
+			}
+			if (File.Exists(a) && !File.Exists(b)) {
+				File.Copy(a, b);
+				return;
+			}
+
             throw new NotImplementedException();
         }
 
@@ -244,7 +256,7 @@ namespace KellySync
         }
 
         private static string Slashify( string path, bool isDirectory ) {
-            FileSystemInfo fi = isDirectory 
+            FileSystemInfo fi = isDirectory
                 ? (FileSystemInfo)(new DirectoryInfo(path))
                 : new FileInfo(path);
 
