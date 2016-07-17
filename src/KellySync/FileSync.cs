@@ -103,15 +103,29 @@ namespace KellySync
 
         private void SyncFile(string a, string b) {
 			if(!File.Exists(a) && File.Exists(b)) {
-				File.Copy(b, a);
+				File.Copy(b, a, true);
+                File.SetLastWriteTime(a, File.GetLastWriteTime(a));
 				return;
 			}
 			if (File.Exists(a) && !File.Exists(b)) {
-				File.Copy(a, b);
+				File.Copy(a, b, true);
+                File.SetLastWriteTime(b, File.GetLastWriteTime(b));
 				return;
 			}
 
-            throw new NotImplementedException();
+            var atime = File.GetLastWriteTime(a);
+            var btime = File.GetLastWriteTime(b);
+
+            if(atime > btime) {
+                File.Copy(a, b, true);
+                File.SetLastWriteTime(b, File.GetLastWriteTime(b));
+                return;
+            }
+            if(btime > atime) {
+                File.Copy(b, a, true);
+                File.SetLastWriteTime(a, File.GetLastWriteTime(a));
+                return;
+            }
         }
 
         private void OnLocalFileEvent( object sender, FileSystemEventArgs args ) {
