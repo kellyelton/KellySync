@@ -1,6 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace KellySync
 {
@@ -15,6 +19,9 @@ namespace KellySync
         private IOEventHandler _remoteHandler;
         private Config _config;
         private bool _isDirectory;
+        private CancellationTokenSource _scanTaskCancel;
+        private Task _scanTask;
+        private string _filter;
 
         private System.Collections.Generic.Dictionary<string, WatcherChangeTypes> _inProgress;
 
@@ -26,6 +33,8 @@ namespace KellySync
         public FileSync( Config config, bool isDirectory, string path, string filter ) {
             _config = config;
             _isDirectory = isDirectory;
+            _filter = filter;
+            if (_isDirectory && string.IsNullOrWhiteSpace(_filter)) _filter = "*";
             _inProgress = new System.Collections.Generic.Dictionary<string, WatcherChangeTypes>(StringComparer.InvariantCultureIgnoreCase);
             RemotePath = GetRemotePath(path, _isDirectory);
             LocalPath = GetPath(path);
@@ -51,14 +60,46 @@ namespace KellySync
 
         public void Start() {
             if (disposedValue) throw new ObjectDisposedException(nameof(FileSync));
+            if (_scanTaskCancel != null) return;
+            _scanTaskCancel = new CancellationTokenSource();
+            _scanTask = Task.Run(() => Scan(_scanTaskCancel.Token), _scanTaskCancel.Token);
             _localHandler.Start();
             _remoteHandler.Start();
         }
 
         public void Stop() {
             if (disposedValue) throw new ObjectDisposedException(nameof(FileSync));
+            if (_scanTaskCancel == null) return;
             _localHandler.Stop();
             _remoteHandler.Stop();
+
+            var loc = _scanTaskCancel;
+            _scanTaskCancel = null;
+            loc.Cancel();
+            _scanTask.Wait();
+            loc.Dispose();
+            _scanTask.Dispose();
+            _scanTask = null;
+        }
+
+        private void Scan(CancellationToken cancel) {
+            var query = GetPathsToScan();
+            while (!disposedValue && !cancel.IsCancellationRequested) {
+                using(var en = query.GetEnumerator()){
+                    while (en.MoveNext() && !cancel.IsCancellationRequested) {
+                        // TODO: actually do scanning on file
+                        var path = en.Current;
+
+                        SyncFile(path, GetOppositePath(path, _isDirectory));
+                        Task.Delay(100, cancel);
+                    }
+                }
+                Task.Delay(60000, cancel);
+            }
+        }
+
+        private void SyncFile(string a, string b) {
+
         }
 
         private void OnLocalFileEvent( object sender, FileSystemEventArgs args ) {
@@ -145,6 +186,28 @@ namespace KellySync
                     break;
                 }
             }
+        }
+
+        private  IEnumerable<string> GetPathsToScan() {
+            if (!_isDirectory) {
+                // If it's just a file, then return just the Local and Remote paths
+                yield return this.RemotePath;
+                yield return this.LocalPath;
+            } else {
+                // If it's a directory, use GetFiles(filter) on the Local and Remote paths
+                foreach(var file in Directory.GetFiles(this.RemotePath, this._filter)) {
+                    yield return file;
+                }
+                foreach(var file in Directory.GetFiles(this.LocalPath, this._filter)) {
+                    yield return file;
+                }
+            }
+        }
+
+        private string GetOppositePath( string fullPath, bool isDirectory ) {
+            if (fullPath.Contains(this.RemotePath))
+                return GetLocalPath(fullPath, isDirectory);
+            return GetRemotePath(fullPath, isDirectory);
         }
 
         private string GetRemotePath( string fullPath, bool isDirectory ) {
