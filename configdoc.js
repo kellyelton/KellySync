@@ -68,12 +68,12 @@
 // %LOCALAPPDATA%\machineconfig.json        \\local config file with unencrypted profiles 
 // \program.exe                             \\Main Program
 // \config.json                             \\config file
-// 
-// 
-// 
-// 
-// 
-// 
-// 
-// 
+// \Profiles
+// \Profiles\Home\profile.config
+// \Profiles\Home\Files\.ssh\goodcon.ssh
+// \Profiles\Home\Files\.bashrc
+// \Profiles\Shared\profile.config
+// \Profiles\Shared\Files\.vimrc
+// \Profiles\Shared\Files\.gitconfig
+// \Profiles\Shared\Files\.vimfiles\README.txt
 

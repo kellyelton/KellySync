@@ -6,5 +6,6 @@ namespace KellySync
     {
         public string RootPath { get; set; }
         public string ApplicationPath => Path.Combine(RootPath, "App");
+        public string FileDumpPath => Path.Combine(RootPath, "Files");
     }
 }
