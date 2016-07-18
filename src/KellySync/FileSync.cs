@@ -81,19 +81,19 @@ namespace KellySync
             _scanTask = null;
         }
 
-        private void Scan(CancellationToken cancel) {
+        private void Scan( CancellationToken cancel ) {
             var query = GetPathsToScan();
             while (!disposedValue && !cancel.IsCancellationRequested) {
-                using(var en = query.GetEnumerator()){
+                using (var en = query.GetEnumerator()) {
                     while (en.MoveNext() && !cancel.IsCancellationRequested) {
                         // TODO: actually do scanning on file
                         var path = en.Current;
-						var opath = GetOppositePath(path, _isDirectory);
-						lock (this._inProgress) {
-							// This way we don't tickle files that are being moved
-							if (this._inProgress.ContainsKey(path) || this._inProgress.ContainsKey(opath)) continue;
-							SyncFile(path, GetOppositePath(path, _isDirectory));
-						}
+                        var opath = GetOppositePath(path, _isDirectory);
+                        lock (this._inProgress) {
+                            // This way we don't tickle files that are being moved
+                            if (this._inProgress.ContainsKey(path) || this._inProgress.ContainsKey(opath)) continue;
+                            SyncFile(path, GetOppositePath(path, _isDirectory));
+                        }
                         Task.Delay(100, cancel);
                     }
                 }
@@ -101,27 +101,27 @@ namespace KellySync
             }
         }
 
-        private void SyncFile(string a, string b) {
-			if(!File.Exists(a) && File.Exists(b)) {
-				File.Copy(b, a, true);
+        private void SyncFile( string a, string b ) {
+            if (!File.Exists(a) && File.Exists(b)) {
+                File.Copy(b, a, true);
                 File.SetLastWriteTime(a, File.GetLastWriteTime(a));
-				return;
-			}
-			if (File.Exists(a) && !File.Exists(b)) {
-				File.Copy(a, b, true);
-                File.SetLastWriteTime(b, File.GetLastWriteTime(b));
-				return;
-			}
-
-            var atime = File.GetLastWriteTime(a);
-            var btime = File.GetLastWriteTime(b);
-
-            if(atime > btime) {
+                return;
+            }
+            if (File.Exists(a) && !File.Exists(b)) {
                 File.Copy(a, b, true);
                 File.SetLastWriteTime(b, File.GetLastWriteTime(b));
                 return;
             }
-            if(btime > atime) {
+
+            var atime = File.GetLastWriteTime(a);
+            var btime = File.GetLastWriteTime(b);
+
+            if (atime > btime) {
+                File.Copy(a, b, true);
+                File.SetLastWriteTime(b, File.GetLastWriteTime(b));
+                return;
+            }
+            if (btime > atime) {
                 File.Copy(b, a, true);
                 File.SetLastWriteTime(a, File.GetLastWriteTime(a));
                 return;
@@ -214,17 +214,17 @@ namespace KellySync
             }
         }
 
-        private  IEnumerable<string> GetPathsToScan() {
+        private IEnumerable<string> GetPathsToScan() {
             if (!_isDirectory) {
                 // If it's just a file, then return just the Local and Remote paths
                 yield return this.RemotePath;
                 yield return this.LocalPath;
             } else {
                 // If it's a directory, use GetFiles(filter) on the Local and Remote paths
-                foreach(var file in Directory.GetFiles(this.RemotePath, this._filter)) {
+                foreach (var file in Directory.GetFiles(this.RemotePath, this._filter)) {
                     yield return file;
                 }
-                foreach(var file in Directory.GetFiles(this.LocalPath, this._filter)) {
+                foreach (var file in Directory.GetFiles(this.LocalPath, this._filter)) {
                     yield return file;
                 }
             }
