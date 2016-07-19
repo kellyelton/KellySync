@@ -17,7 +17,6 @@ namespace KellySync
         private IOEventHandler _localHandler;
         private IOEventHandler _remoteHandler;
         private Config _config;
-        private bool _isDirectory;
         private CancellationTokenSource _scanTaskCancel;
         private Task _scanTask;
         private string _filter;
@@ -27,16 +26,16 @@ namespace KellySync
 
         private static readonly string HomePath = Environment.ExpandEnvironmentVariables(@"%USERPROFILE%");
 
-        public FileSync( Config config, bool isDirectory, string path ) : this(config, isDirectory, path, null) { }
+        public FileSync( Config config, string path ) : this(config, path, null) { }
 
-        public FileSync( Config config, bool isDirectory, string path, string filter ) {
+        public FileSync( Config config, string path, string filter ) {
             _config = config;
-            _isDirectory = isDirectory;
             _filter = filter;
-            if (_isDirectory && string.IsNullOrWhiteSpace(_filter)) _filter = "*";
+            if (string.IsNullOrWhiteSpace(_filter)) _filter = "*";
             _inProgress = new System.Collections.Generic.Dictionary<string, WatcherChangeTypes>(StringComparer.InvariantCultureIgnoreCase);
-            RemotePath = GetRemotePath(path, _isDirectory);
+            RemotePath = GetRemotePath(path);
             LocalPath = GetPath(path);
+
             if (!Directory.Exists(LocalPath)) {
                 Trace.WriteLine($"Creating Directory: '{LocalPath}'");
                 Directory.CreateDirectory(LocalPath);
@@ -61,7 +60,7 @@ namespace KellySync
             if (disposedValue) throw new ObjectDisposedException(nameof(FileSync));
             if (_scanTaskCancel != null) return;
             _scanTaskCancel = new CancellationTokenSource();
-            _scanTask = Task.Run(() => Scan(_scanTaskCancel.Token), _scanTaskCancel.Token);
+            _scanTask = Scan(_scanTaskCancel.Token);
             _localHandler.Start();
             _remoteHandler.Start();
         }
@@ -81,35 +80,35 @@ namespace KellySync
             _scanTask = null;
         }
 
-        private void Scan( CancellationToken cancel ) {
+        private async Task Scan( CancellationToken cancel ) {
             var query = GetPathsToScan();
             while (!disposedValue && !cancel.IsCancellationRequested) {
                 using (var en = query.GetEnumerator()) {
                     while (en.MoveNext() && !cancel.IsCancellationRequested) {
                         // TODO: actually do scanning on file
                         var path = en.Current;
-                        var opath = GetOppositePath(path, _isDirectory);
+                        var opath = GetOppositePath(path);
                         lock (this._inProgress) {
                             // This way we don't tickle files that are being moved
                             if (this._inProgress.ContainsKey(path) || this._inProgress.ContainsKey(opath)) continue;
-                            SyncFile(path, GetOppositePath(path, _isDirectory));
+                            SyncFile(path, GetOppositePath(path));
                         }
-                        Task.Delay(100, cancel);
+                        await Task.Delay(100, cancel);
                     }
                 }
-                Task.Delay(30000, cancel);
+                await Task.Delay(30000, cancel);
             }
         }
 
         private void SyncFile( string a, string b ) {
             if (!File.Exists(a) && File.Exists(b)) {
                 File.Copy(b, a, true);
-                File.SetLastWriteTime(a, File.GetLastWriteTime(a));
+                File.SetLastWriteTime(b, File.GetLastWriteTime(a));
                 return;
             }
             if (File.Exists(a) && !File.Exists(b)) {
                 File.Copy(a, b, true);
-                File.SetLastWriteTime(b, File.GetLastWriteTime(b));
+                File.SetLastWriteTime(a, File.GetLastWriteTime(b));
                 return;
             }
 
@@ -118,24 +117,26 @@ namespace KellySync
 
             if (atime > btime) {
                 File.Copy(a, b, true);
-                File.SetLastWriteTime(b, File.GetLastWriteTime(b));
+                File.SetLastWriteTime(a, File.GetLastWriteTime(b));
                 return;
             }
             if (btime > atime) {
                 File.Copy(b, a, true);
-                File.SetLastWriteTime(a, File.GetLastWriteTime(a));
+                File.SetLastWriteTime(b, File.GetLastWriteTime(a));
                 return;
             }
         }
 
-        private void OnLocalFileEvent( object sender, FileSystemEventArgs args ) {
-            var toPath = GetRemotePath(args.FullPath, false);
-            var fromPath = args.FullPath;
+        private void OnLocalFileEvent( object sender, bool isDirectory, FileSystemEventArgs args ) {
+            var directory = args.FullPath;
+            if (!isDirectory) directory = Directory.GetParent(args.FullPath).FullName;
+            var toPath = GetRemotePath(directory);
+            var fromPath = directory;
             ReplicateFileEvent(fromPath, toPath, args);
         }
 
-        private void OnRemoteFileEvent( object sender, FileSystemEventArgs args ) {
-            var toPath = GetLocalPath(args.FullPath, false);
+        private void OnRemoteFileEvent( object sender, bool isDirectory, FileSystemEventArgs args ) {
+            var toPath = GetLocalPath(args.FullPath);
             var fromPath = args.FullPath;
             ReplicateFileEvent(fromPath, toPath, args);
         }
@@ -199,8 +200,8 @@ namespace KellySync
                 case WatcherChangeTypes.Renamed: {
                     var rargs = (RenamedEventArgs)args;
                     var isToRemote = rargs.OldFullPath.Contains(new DirectoryInfo(LocalPath).FullName);
-                    var before = isToRemote ? GetRemotePath(rargs.OldFullPath, false) : GetLocalPath(rargs.OldFullPath, false);
-                    var after = isToRemote ? GetRemotePath(rargs.FullPath, false) : GetLocalPath(rargs.FullPath, false);
+                    var before = isToRemote ? GetRemotePath(rargs.OldFullPath) : GetLocalPath(rargs.OldFullPath);
+                    var after = isToRemote ? GetRemotePath(rargs.FullPath) : GetLocalPath(rargs.FullPath);
                     if (File.Exists(before)) {
                         Trace.WriteLine($"Moving File: '{before}' -> '{after}'");
                         File.Move(before, after);
@@ -215,10 +216,10 @@ namespace KellySync
         }
 
         private IEnumerable<string> GetPathsToScan() {
-            if (!_isDirectory) {
+            if (!this._filter.Contains("*")) {
                 // If it's just a file, then return just the Local and Remote paths
-                yield return this.RemotePath;
-                yield return this.LocalPath;
+                yield return this.FullRemotePath;
+                yield return this.FullLocalPath;
             } else {
                 // If it's a directory, use GetFiles(filter) on the Local and Remote paths
                 foreach (var file in Directory.GetFiles(this.RemotePath, this._filter)) {
@@ -230,16 +231,16 @@ namespace KellySync
             }
         }
 
-        private string GetOppositePath( string fullPath, bool isDirectory ) {
+        private string GetOppositePath( string fullPath ) {
             if (fullPath.Contains(this.RemotePath))
-                return GetLocalPath(fullPath, isDirectory);
-            return GetRemotePath(fullPath, isDirectory);
+                return GetLocalPath(fullPath);
+            return GetRemotePath(fullPath);
         }
 
-        private string GetRemotePath( string fullPath, bool isDirectory ) {
-            return Path.Combine(GetPath(_config.FileDumpPath), Slashify(GetPath(fullPath), isDirectory));
+        private string GetRemotePath( string fullPath ) {
+            return Path.Combine(GetPath(_config.FileDumpPath), Slashify(GetPath(fullPath)));
         }
-        private string GetLocalPath( string fullPath, bool isDirectory ) {
+        private string GetLocalPath( string fullPath ) {
             var path = fullPath.Replace(GetPath(_config.FileDumpPath), "");
             path = path.Substring(1);
             path = path.Insert(1, ":");
@@ -269,12 +270,8 @@ namespace KellySync
             }
         }
 
-        private static string Slashify( string path, bool isDirectory ) {
-            FileSystemInfo fi = isDirectory
-                ? (FileSystemInfo)(new DirectoryInfo(path))
-                : new FileInfo(path);
-
-            return fi.FullName.Replace(":", "");
+        private static string Slashify( string path ) {
+            return new DirectoryInfo(path).FullName.Replace(":", "");
         }
 
         #region IDisposable Support

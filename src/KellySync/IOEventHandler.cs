@@ -27,6 +27,7 @@ namespace KellySync
                 Watcher = new FileSystemWatcher(path, filter);
             else
                 Watcher = new FileSystemWatcher(path);
+            .NotifyFilter = NotifyFilters.FileName; <---- The key to all things
             EventsToHandle = eventsToHandle;
             _handlers = new ConcurrentDictionary<WatcherChangeTypes, ConcurrentBag<FileSystemEventHandler>>();
 
