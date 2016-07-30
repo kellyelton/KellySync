@@ -14,8 +14,8 @@ namespace KellySync
         public string FullRemotePath { get; }
         public string FullLocalPath { get; }
 
-        private IOEventHandler _localHandler;
-        private IOEventHandler _remoteHandler;
+        private IOWatcher _localHandler;
+        private IOWatcher _remoteHandler;
         private Config _config;
         private CancellationTokenSource _scanTaskCancel;
         private Task _scanTask;
@@ -52,8 +52,8 @@ namespace KellySync
                 FullLocalPath = FullLocalPath + $"\\{filter}";
             }
 
-            _localHandler = new IOEventHandler(LocalPath, filter).On(OnLocalFileEvent);
-            _remoteHandler = new IOEventHandler(RemotePath, filter).On(OnRemoteFileEvent);
+            _localHandler = new IOWatcher(LocalPath, filter).On(OnLocalFileEvent);
+            _remoteHandler = new IOWatcher(RemotePath, filter).On(OnRemoteFileEvent);
         }
 
         public void Start() {
@@ -127,26 +127,26 @@ namespace KellySync
             }
         }
 
-        private void OnLocalFileEvent( object sender, bool isDirectory, FileSystemEventArgs args ) {
+        private void OnLocalFileEvent( object sender, IOEventArgs args ) {
             var directory = args.FullPath;
-            if (!isDirectory) directory = Directory.GetParent(args.FullPath).FullName;
+			// TODO this null coalesse is improper behavior for this instance, but it's just there for compile sake
+            if (args.IsDirectory ?? false) directory = Directory.GetParent(args.FullPath).FullName;
             var toPath = GetRemotePath(directory);
             var fromPath = directory;
             ReplicateFileEvent(fromPath, toPath, args);
         }
 
-        private void OnRemoteFileEvent( object sender, bool isDirectory, FileSystemEventArgs args ) {
+        private void OnRemoteFileEvent( object sender, IOEventArgs args ) {
             var toPath = GetLocalPath(args.FullPath);
             var fromPath = args.FullPath;
             ReplicateFileEvent(fromPath, toPath, args);
         }
 
-        private void ReplicateFileEvent( string fromPath, string toPath, FileSystemEventArgs args ) {
+        private void ReplicateFileEvent( string fromPath, string toPath, IOEventArgs args ) {
             if (disposedValue) return;
             lock (_inProgress) {
                 if (args.ChangeType == WatcherChangeTypes.Renamed) {
-                    var r = (RenamedEventArgs)args;
-                    Trace.WriteLine($"File Event: {args.ChangeType} '{r.OldFullPath}' to '{r.FullPath}'");
+                    Trace.WriteLine($"File Event: {args.ChangeType} '{args.OldFullPath}' to '{args.FullPath}'");
                 } else {
                     Trace.WriteLine($"File Event: {args.ChangeType} '{args.FullPath}'");
                 }
@@ -198,10 +198,9 @@ namespace KellySync
                     break;
                 }
                 case WatcherChangeTypes.Renamed: {
-                    var rargs = (RenamedEventArgs)args;
-                    var isToRemote = rargs.OldFullPath.Contains(new DirectoryInfo(LocalPath).FullName);
-                    var before = isToRemote ? GetRemotePath(rargs.OldFullPath) : GetLocalPath(rargs.OldFullPath);
-                    var after = isToRemote ? GetRemotePath(rargs.FullPath) : GetLocalPath(rargs.FullPath);
+                    var isToRemote = args.OldFullPath.Contains(new DirectoryInfo(LocalPath).FullName);
+                    var before = isToRemote ? GetRemotePath(args.OldFullPath) : GetLocalPath(args.OldFullPath);
+                    var after = isToRemote ? GetRemotePath(args.FullPath) : GetLocalPath(args.FullPath);
                     if (File.Exists(before)) {
                         Trace.WriteLine($"Moving File: '{before}' -> '{after}'");
                         File.Move(before, after);

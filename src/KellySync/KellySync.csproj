@@ -42,7 +42,8 @@
   <ItemGroup>
     <Compile Include="Config.cs" />
     <Compile Include="FileSync.cs" />
-    <Compile Include="IOEventHandler.cs" />
+    <Compile Include="IOEventArgs.cs" />
+    <Compile Include="IOWatcher.cs" />
     <Compile Include="KellySyncService.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
