@@ -9,10 +9,7 @@ namespace KellySync
 {
     public class FileSync : IDisposable
     {
-        public string RemotePath { get; }
-        public string LocalPath { get; }
-        public string FullRemotePath { get; }
-        public string FullLocalPath { get; }
+        public FilePath Path { get; }
 
         private IOWatcher _localHandler;
         private IOWatcher _remoteHandler;
@@ -23,9 +20,6 @@ namespace KellySync
 
         private Dictionary<string, WatcherChangeTypes> _inProgress;
 
-
-        private static readonly string HomePath = Environment.ExpandEnvironmentVariables(@"%USERPROFILE%");
-
         public FileSync( Config config, string path ) : this(config, path, null) { }
 
         public FileSync( Config config, string path, string filter ) {
@@ -33,27 +27,11 @@ namespace KellySync
             _filter = filter;
             if (string.IsNullOrWhiteSpace(_filter)) _filter = "*";
             _inProgress = new System.Collections.Generic.Dictionary<string, WatcherChangeTypes>(StringComparer.InvariantCultureIgnoreCase);
-            RemotePath = GetRemotePath(path);
-            LocalPath = GetPath(path);
+            Path = new FilePath(path, _config);
+            Path.CreateDirectories();
 
-            if (!Directory.Exists(LocalPath)) {
-                Trace.WriteLine($"Creating Directory: '{LocalPath}'");
-                Directory.CreateDirectory(LocalPath);
-            }
-            if (!Directory.Exists(RemotePath)) {
-                Trace.WriteLine($"Creating Directory: '{RemotePath}'");
-                Directory.CreateDirectory(RemotePath);
-            }
-
-            FullRemotePath = RemotePath;
-            FullLocalPath = LocalPath;
-            if (!string.IsNullOrWhiteSpace(filter)) {
-                FullRemotePath = FullRemotePath + $"\\{filter}";
-                FullLocalPath = FullLocalPath + $"\\{filter}";
-            }
-
-            _localHandler = new IOWatcher(LocalPath, filter).On(OnLocalFileEvent);
-            _remoteHandler = new IOWatcher(RemotePath, filter).On(OnRemoteFileEvent);
+            _localHandler = new IOWatcher(Path.LocalPath, filter).On(OnLocalFileEvent);
+            _remoteHandler = new IOWatcher(Path.RemotePath, filter).On(OnRemoteFileEvent);
         }
 
         public void Start() {
@@ -129,7 +107,7 @@ namespace KellySync
 
         private void OnLocalFileEvent( object sender, IOEventArgs args ) {
             var directory = args.FullPath;
-			// TODO this null coalesse is improper behavior for this instance, but it's just there for compile sake
+			// TODO this null coalesse is improper behavior for this instance, but it's just there for compile sI ake
             if (args.IsDirectory ?? false) directory = Directory.GetParent(args.FullPath).FullName;
             var toPath = GetRemotePath(directory);
             var fromPath = directory;
@@ -215,62 +193,19 @@ namespace KellySync
         }
 
         private IEnumerable<string> GetPathsToScan() {
-            if (!this._filter.Contains("*")) {
+            if (!string.IsNullOrWhiteSpace(_filter) && !this._filter.Contains("*")) {
                 // If it's just a file, then return just the Local and Remote paths
-                yield return this.FullRemotePath;
-                yield return this.FullLocalPath;
+                yield return this.Path.RemotePath;
+                yield return this.Path.LocalPath;
             } else {
                 // If it's a directory, use GetFiles(filter) on the Local and Remote paths
-                foreach (var file in Directory.GetFiles(this.RemotePath, this._filter)) {
+                foreach (var file in Directory.GetFiles(this.Path.RemotePath, this._filter)) {
                     yield return file;
                 }
-                foreach (var file in Directory.GetFiles(this.LocalPath, this._filter)) {
+                foreach (var file in Directory.GetFiles(this.Path.LocalPath, this._filter)) {
                     yield return file;
                 }
             }
-        }
-
-        private string GetOppositePath( string fullPath ) {
-            if (fullPath.Contains(this.RemotePath))
-                return GetLocalPath(fullPath);
-            return GetRemotePath(fullPath);
-        }
-
-        private string GetRemotePath( string fullPath ) {
-            return Path.Combine(GetPath(_config.FileDumpPath), Slashify(GetPath(fullPath)));
-        }
-        private string GetLocalPath( string fullPath ) {
-            var path = fullPath.Replace(GetPath(_config.FileDumpPath), "");
-            path = path.Substring(1);
-            path = path.Insert(1, ":");
-            return path;
-        }
-
-        private static string GetPath( string path ) {
-            if (string.IsNullOrWhiteSpace(path)) throw new ArgumentNullException(nameof(path));
-            var ret = path;
-
-            try {
-                // Remove ending slash
-                ret = ret.TrimEnd('\\', '/');
-
-                // ~ for home
-                ret = ret.Replace("~", HomePath);
-
-                // Expand env vars
-                ret = Environment.ExpandEnvironmentVariables(ret);
-
-                if (!System.IO.Path.IsPathRooted(ret))
-                    throw new FormatException($"No root defined for path '{path}'.");
-
-                return ret;
-            } catch (Exception ex) {
-                throw new FormatException($"Can't resolve path: '{path}' -> '{ret}'", ex);
-            }
-        }
-
-        private static string Slashify( string path ) {
-            return new DirectoryInfo(path).FullName.Replace(":", "");
         }
 
         #region IDisposable Support

@@ -41,6 +41,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Config.cs" />
+    <Compile Include="FilePath.cs" />
     <Compile Include="FileSync.cs" />
     <Compile Include="IOEventArgs.cs" />
     <Compile Include="IOWatcher.cs" />
