@@ -64,12 +64,11 @@ namespace KellySync
                 using (var en = query.GetEnumerator()) {
                     while (en.MoveNext() && !cancel.IsCancellationRequested) {
                         // TODO: actually do scanning on file
-                        var path = en.Current;
-                        var opath = GetOppositePath(path);
+                        var path = new FilePath(en.Current, _config);
                         lock (this._inProgress) {
                             // This way we don't tickle files that are being moved
-                            if (this._inProgress.ContainsKey(path) || this._inProgress.ContainsKey(opath)) continue;
-                            SyncFile(path, GetOppositePath(path));
+                            if (this._inProgress.ContainsKey(path.OriginalPath)) continue;
+                            SyncFilePath(path, _config);
                         }
                         await Task.Delay(100, cancel);
                     }
@@ -78,30 +77,71 @@ namespace KellySync
             }
         }
 
-        private void SyncFile( string a, string b ) {
-            if (!File.Exists(a) && File.Exists(b)) {
-                File.Copy(b, a, true);
-                File.SetLastWriteTime(b, File.GetLastWriteTime(a));
-                return;
-            }
-            if (File.Exists(a) && !File.Exists(b)) {
-                File.Copy(a, b, true);
-                File.SetLastWriteTime(a, File.GetLastWriteTime(b));
-                return;
-            }
+        private void SyncFilePath( FilePath path, Config config ) {
+            if (!path.IsDirectory) {
+                if (!File.Exists(path.LocalPath) && File.Exists(path.RemotePath)) {
+                    File.Copy(path.RemotePath, path.LocalPath, true);
+                    File.SetLastWriteTime(path.RemotePath, File.GetLastWriteTime(path.LocalPath));
+                    return;
+                }
+                if (File.Exists(path.LocalPath) && !File.Exists(path.RemotePath)) {
+                    File.Copy(path.LocalPath, path.RemotePath, true);
+                    File.SetLastWriteTime(path.LocalPath, File.GetLastWriteTime(path.RemotePath));
+                    return;
+                }
 
-            var atime = File.GetLastWriteTime(a);
-            var btime = File.GetLastWriteTime(b);
+                var atime = File.GetLastWriteTime(path.LocalPath);
+                var btime = File.GetLastWriteTime(path.RemotePath);
 
-            if (atime > btime) {
-                File.Copy(a, b, true);
-                File.SetLastWriteTime(a, File.GetLastWriteTime(b));
-                return;
-            }
-            if (btime > atime) {
-                File.Copy(b, a, true);
-                File.SetLastWriteTime(b, File.GetLastWriteTime(a));
-                return;
+                if (atime > btime) {
+                    File.Copy(path.LocalPath, path.RemotePath, true);
+                    File.SetLastWriteTime(path.LocalPath, File.GetLastWriteTime(path.RemotePath));
+                    return;
+                }
+                if (btime > atime) {
+                    File.Copy(path.RemotePath, path.LocalPath, true);
+                    File.SetLastWriteTime(path.RemotePath, File.GetLastWriteTime(path.LocalPath));
+                    return;
+                }
+            } else {
+                if (!Directory.Exists(path.LocalPath) && Directory.Exists(path.RemotePath)) {
+                    Directory.CreateDirectory(path.LocalPath);
+                    Directory.SetLastWriteTime(path.RemotePath, Directory.GetLastWriteTime(path.LocalPath));
+                    return;
+                }
+                if (Directory.Exists(path.LocalPath) && !Directory.Exists(path.RemotePath)) {
+                    Directory.CreateDirectory(path.RemotePath);
+                    Directory.SetLastWriteTime(path.LocalPath, Directory.GetLastWriteTime(path.RemotePath));
+                    return;
+                }
+
+                foreach(var dir in Directory.GetDirectories(path.LocalPath)) {
+                    var fpath = new FilePath(dir, config);
+                    SyncFilePath(fpath, config);
+                }
+                foreach(var dir in Directory.GetDirectories(path.RemotePath)) {
+                    var fpath = new FilePath(dir, config);
+                    SyncFilePath(fpath, config);
+                }
+
+                foreach(var file in Directory.GetFiles(path.LocalPath)) {
+                    var fpath = new FilePath(file, config);
+                    SyncFilePath(fpath, config);
+                }
+                foreach(var file in Directory.GetFiles(path.RemotePath)) {
+                    var fpath = new FilePath(file, config);
+                    SyncFilePath(fpath, config);
+                }
+
+
+                var atime = Directory.GetLastWriteTime(path.LocalPath);
+                var btime = Directory.GetLastWriteTime(path.RemotePath);
+
+                if (atime > btime) {
+                    Directory.SetLastWriteTime(path.LocalPath, Directory.GetLastWriteTime(path.RemotePath));
+                } else if (btime > atime) {
+                    Directory.SetLastWriteTime(path.RemotePath, Directory.GetLastWriteTime(path.LocalPath));
+                }
             }
         }
 
