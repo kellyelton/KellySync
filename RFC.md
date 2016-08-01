@@ -10,7 +10,6 @@ This document defines the requirements, process, and conditions of file synchron
 - Both locations are on the same partition of the same hard drive
 - Both locations have trustworty information. This doesn't take into account file integrety(except between the two locations)
 
-1. 
 ## Requirements
 ### Conditions
 	- Files last write time are different
