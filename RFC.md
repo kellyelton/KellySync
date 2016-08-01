@@ -1,10 +1,21 @@
-# Syncing
+# File Synchronization Between Two Locations
 
+## Abstract
+This document defines the requirements, process, and conditions of file synchronization. This document focuses on the logic and actions to be taken to synchronize files between two locations, and does not focus on any individual way of communicating the changes between the two locations. This is to say that where the files are in relation to eachother is irrelevent to this implementation. The operating system is also irrelevant to this document.
+
+## Inconsequential 
+- Where the locations are in relation to eachother
+
+## Assumptions
+- Both locations are on the same partition of the same hard drive
+- Both locations have trustworty information. This doesn't take into account file integrety(except between the two locations)
+
+1. 
 ## Requirements
 ### Conditions
 	- Files last write time are different
 	- Files sizes are different
-	- Files hashes are different
+	- Files hashes are different(this should be optional by file)
 	- Files names are different
 
 ### Restrictions
