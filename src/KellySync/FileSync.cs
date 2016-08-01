@@ -78,6 +78,7 @@ namespace KellySync
         }
 
         private void SyncFilePath( FilePath path, Config config ) {
+            File.GetAttributes().HasFlag(FileAttributes.)
             if (!path.IsDirectory) {
                 if (!File.Exists(path.LocalPath) && File.Exists(path.RemotePath)) {
                     File.Copy(path.RemotePath, path.LocalPath, true);
