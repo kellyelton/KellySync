@@ -40,7 +40,12 @@ namespace KellySync
                     sync.Start();
                 }
             }
-            await Task.Run(() =>_running.Wait());
+
+			var tcs = new TaskCompletionSource<object>();
+			ThreadPool.RegisterWaitForSingleObject(_running.WaitHandle, (o, timeout) => {
+				tcs.SetResult(null);
+			}, null, TimeSpan.MaxValue, true);
+			await tcs.Task;
         }
 
         public void Stop() {
