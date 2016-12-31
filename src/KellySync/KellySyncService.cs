@@ -8,6 +8,9 @@ namespace KellySync
     public class KellySyncService : IDisposable {
         public Config Config { get; }
 
+		/// <summary>
+		/// Returns a copy of the list of <see cref="FileSync"/>'s
+		/// </summary>
         public FileSync[] FileSyncs { get { lock (_fileSyncs) return _fileSyncs.ToArray(); }}
 
         private List<FileSync> _fileSyncs;
