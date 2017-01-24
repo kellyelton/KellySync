@@ -32,10 +32,10 @@ namespace KellySync
 
         static IEnumerable<FileSync> GetFileSyncs( Config config ) {
             yield return new FileSync(config, @"%USERPROFILE%\SyncTest");
-            //yield return new FileSync(config, @"%USERPROFILE%\vimfiles");
-            //yield return new FileSync(config, @"%USERPROFILE%", ".bashrc");
-            //yield return new FileSync(config, @"%USERPROFILE%", ".gitconfig");
-            //yield return new FileSync(config, @"%USERPROFILE%", ".vimrc");
-        }
+			yield return new FileSync( config, @"%USERPROFILE%\vimfiles" );
+			yield return new FileSync( config, @"%USERPROFILE%", ".bashrc" );
+			yield return new FileSync( config, @"%USERPROFILE%", ".gitconfig" );
+			yield return new FileSync( config, @"%USERPROFILE%", ".vimrc" );
+		}
     }
 }

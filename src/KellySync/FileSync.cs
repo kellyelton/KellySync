@@ -246,19 +246,12 @@ namespace KellySync
         }
 
         private IEnumerable<string> GetPathsToScan() {
-            if (!string.IsNullOrWhiteSpace(_filter) && !this._filter.Contains("*")) {
-                // If it's just a file, then return just the Local and Remote paths
-                yield return this.Path.RemotePath;
-                yield return this.Path.LocalPath;
-            } else {
-                // If it's a directory, use GetFiles(filter) on the Local and Remote paths
-                foreach (var file in Directory.GetFiles(this.Path.RemotePath, this._filter)) {
-                    yield return file;
-                }
-                foreach (var file in Directory.GetFiles(this.Path.LocalPath, this._filter)) {
-                    yield return file;
-                }
-            }
+			foreach (var file in Directory.GetFiles(this.Path.RemotePath, this._filter ?? "*")) {
+				yield return file;
+			}
+			foreach (var file in Directory.GetFiles(this.Path.LocalPath, this._filter ?? "*")) {
+				yield return file;
+			}
         }
 
         #region IDisposable Support
