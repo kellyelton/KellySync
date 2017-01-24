@@ -15,7 +15,7 @@ namespace KellySync
 
         private Config _config;
 
-        public FilePath( string path, Config config ) {
+        public FilePath( string path, Config config, bool? isDirectory = null, bool verifyPath = true ) {
             _config = config;
             if (IsRemotePath(path) == false) {
                 OriginalPath = path;
@@ -27,9 +27,11 @@ namespace KellySync
                 RemotePath = ExpandCleanValidatePath(path, expand: false);
             }
 
-            if (File.Exists(LocalPath) || File.Exists(RemotePath)) IsDirectory = false;
-            else if (Directory.Exists(LocalPath) || Directory.Exists(RemotePath)) IsDirectory = true;
-            else throw new InvalidOperationException();
+            if( isDirectory == null && verifyPath ) {
+                if( File.Exists( LocalPath ) || File.Exists( RemotePath ) ) IsDirectory = false;
+                else if( Directory.Exists( LocalPath ) || Directory.Exists( RemotePath ) ) IsDirectory = true;
+                else throw new FileNotFoundException($"File or directory not found at {LocalPath} or {RemotePath}");
+            }
         }
 
         public void CreateDirectories() {
@@ -54,8 +56,9 @@ namespace KellySync
         }
 
         private string GetOriginalPath( string fullPath ) {
-            var path = fullPath.Substring(ExpandCleanValidatePath(_config.FileDumpPath).Length);
-            if (path[0] == '%')
+            var cleanedDumpPath = ExpandCleanValidatePath( _config.FileDumpPath );
+            var path = fullPath.Substring( cleanedDumpPath.Length).TrimStart('\\');
+            if (path[0] == '%') // WTF??
                 return path;
             path = path.Insert(1, ":");
             return path;

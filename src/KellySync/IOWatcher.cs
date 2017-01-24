@@ -10,6 +10,7 @@ namespace KellySync
     {
         public FileSystemWatcher Watcher { get; private set; }
         public WatcherChangeTypes EventsToHandle { get; }
+        public event Action<object, IOEventException> IOEventException;
 
         private ConcurrentDictionary<WatcherChangeTypes, ConcurrentBag<IOEventHandler>> _handlers;
 
@@ -48,19 +49,23 @@ namespace KellySync
         }
 
         protected virtual void OnFileSystemEventFired( object sender, FileSystemEventArgs e ) {
-            switch( e.ChangeType ) {
-                case WatcherChangeTypes.Created:
-                    OnIOEventFired( WatcherChangeTypes.Created, this, e );
-                    break;
-                case WatcherChangeTypes.Deleted:
-                    OnIOEventFired( WatcherChangeTypes.Deleted, this, e );
-                    break;
-                case WatcherChangeTypes.Changed:
-                    OnIOEventFired( WatcherChangeTypes.Changed, this, e );
-                    break;
-                case WatcherChangeTypes.Renamed:
-                    OnIOEventFired( WatcherChangeTypes.Renamed, this, e );
-                    break;
+            try {
+                switch( e.ChangeType ) {
+                    case WatcherChangeTypes.Created:
+                        OnIOEventFired( WatcherChangeTypes.Created, this, e );
+                        break;
+                    case WatcherChangeTypes.Deleted:
+                        OnIOEventFired( WatcherChangeTypes.Deleted, this, e );
+                        break;
+                    case WatcherChangeTypes.Changed:
+                        OnIOEventFired( WatcherChangeTypes.Changed, this, e );
+                        break;
+                    case WatcherChangeTypes.Renamed:
+                        OnIOEventFired( WatcherChangeTypes.Renamed, this, e );
+                        break;
+                }
+            } catch (Exception ex ) {
+                IOEventException?.Invoke( this, new IOEventException( e, ex ) );
             }
         }
 
@@ -108,6 +113,12 @@ namespace KellySync
             return this;
         }
 
+        public IOWatcher On( Action<object, IOEventException> action ) {
+            IOEventException += action;
+
+            return this;
+        }
+
         public void Start() {
             Watcher.EnableRaisingEvents = true;
         }
@@ -123,6 +134,10 @@ namespace KellySync
             if( !disposedValue ) {
                 if( disposing ) {
                     // TODO: dispose managed state (managed objects).
+                    foreach(Action<object, IOEventException> ac in IOEventException.GetInvocationList() ) {
+                        IOEventException -= ac;
+                    }
+
                     Watcher.Dispose();
                     Watcher = null;
                     while( _handlers.Count > 0 ) {
@@ -164,4 +179,14 @@ namespace KellySync
     }
 
     public delegate void IOEventHandler( object sender, IOEventArgs args );
+
+    public class IOEventException : Exception
+    {
+        public FileSystemEventArgs FileSystemArgs { get; set; }
+
+        public IOEventException( FileSystemEventArgs e, Exception ex )
+            :base(ex.Message, ex) {
+            this.FileSystemArgs = e;
+        }
+    }
 }

@@ -30,8 +30,8 @@ namespace KellySync
             Path = new FilePath(path, _config);
             Path.CreateDirectories();
 
-            _localHandler = new IOWatcher(_config, Path.LocalPath, filter).On(OnLocalFileEvent);
-            _remoteHandler = new IOWatcher(_config, Path.RemotePath, filter).On(OnRemoteFileEvent);
+            _localHandler = new IOWatcher(_config, Path.LocalPath, filter).On(OnLocalFileEvent).On(OnLocalIOEventException);
+            _remoteHandler = new IOWatcher(_config, Path.RemotePath, filter).On(OnRemoteFileEvent).On(OnRemoteIOEventException);
         }
 
         public void Start() {
@@ -227,6 +227,22 @@ namespace KellySync
                     break;
                 }
             }
+        }
+
+        private void OnLocalIOEventException( object sender, IOEventException args ) {
+            Exception ex = args.InnerException;
+            string nl = Environment.NewLine;
+            FileSystemEventArgs fa = args.FileSystemArgs;
+
+            Trace.TraceError( $"Local IO [{fa.FullPath}:{fa.ChangeType}] {ex.Message}{nl}{ex.StackTrace}" );
+        }
+
+        private void OnRemoteIOEventException( object sender, IOEventException args ) {
+            Exception ex = args.InnerException;
+            string nl = Environment.NewLine;
+            FileSystemEventArgs fa = args.FileSystemArgs;
+
+            Trace.TraceError( $"Remote IO [{fa.FullPath}:{fa.ChangeType}] {ex.Message}{nl}{ex.StackTrace}" );
         }
 
         private IEnumerable<string> GetPathsToScan() {

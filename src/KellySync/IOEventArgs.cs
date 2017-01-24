@@ -14,12 +14,13 @@ namespace KellySync
 		public IOEventArgs( FileSystemEventArgs fileSystemArgs, Config config ) {
 			ChangeType = fileSystemArgs.ChangeType;
 			Name = fileSystemArgs.Name;
-            Path = new FilePath(fileSystemArgs.FullPath, config);
-            
+
+            Path = new FilePath( fileSystemArgs.FullPath, config, verifyPath: ChangeType != WatcherChangeTypes.Deleted );
+
 			var rename = fileSystemArgs as RenamedEventArgs;
 			if (rename != null) {
 				IsRename = true;
-                OldPath = new KellySync.FilePath(rename.OldFullPath, config);
+                OldPath = new KellySync.FilePath(rename.OldFullPath, config, Path.IsDirectory);
 			}
 		}
 	}
