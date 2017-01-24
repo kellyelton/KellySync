@@ -30,8 +30,8 @@ namespace KellySync
             Path = new FilePath(path, _config);
             Path.CreateDirectories();
 
-            _localHandler = new IOWatcher(Path.LocalPath, filter).On(OnLocalFileEvent);
-            _remoteHandler = new IOWatcher(Path.RemotePath, filter).On(OnRemoteFileEvent);
+            _localHandler = new IOWatcher(_config, Path.LocalPath, filter).On(OnLocalFileEvent);
+            _remoteHandler = new IOWatcher(_config, Path.RemotePath, filter).On(OnRemoteFileEvent);
         }
 
         public void Start() {
@@ -78,7 +78,6 @@ namespace KellySync
         }
 
         private void SyncFilePath( FilePath path, Config config ) {
-            File.GetAttributes().HasFlag(FileAttributes.)
             if (!path.IsDirectory) {
                 if (!File.Exists(path.LocalPath) && File.Exists(path.RemotePath)) {
                     File.Copy(path.RemotePath, path.LocalPath, true);
@@ -147,27 +146,20 @@ namespace KellySync
         }
 
         private void OnLocalFileEvent( object sender, IOEventArgs args ) {
-            var directory = args.FullPath;
-			// TODO this null coalesse is improper behavior for this instance, but it's just there for compile sI ake
-            if (args.IsDirectory ?? false) directory = Directory.GetParent(args.FullPath).FullName;
-            var toPath = GetRemotePath(directory);
-            var fromPath = directory;
-            ReplicateFileEvent(fromPath, toPath, args);
+            ReplicateFileEvent( args.Path.LocalPath, args.Path.RemotePath, false, args );
         }
 
         private void OnRemoteFileEvent( object sender, IOEventArgs args ) {
-            var toPath = GetLocalPath(args.FullPath);
-            var fromPath = args.FullPath;
-            ReplicateFileEvent(fromPath, toPath, args);
+            ReplicateFileEvent( args.Path.RemotePath, args.Path.LocalPath, true, args );
         }
 
-        private void ReplicateFileEvent( string fromPath, string toPath, IOEventArgs args ) {
+        private void ReplicateFileEvent( string fromPath, string toPath, bool isRemoteEvent, IOEventArgs args ) {
             if (disposedValue) return;
             lock (_inProgress) {
                 if (args.ChangeType == WatcherChangeTypes.Renamed) {
-                    Trace.WriteLine($"File Event: {args.ChangeType} '{args.OldFullPath}' to '{args.FullPath}'");
+                    Trace.WriteLine($"File Event: {args.ChangeType} '{args.OldPath.OriginalPath}' to '{args.Path.OriginalPath}'");
                 } else {
-                    Trace.WriteLine($"File Event: {args.ChangeType} '{args.FullPath}'");
+                    Trace.WriteLine($"File Event: {args.ChangeType} '{args.Path.OriginalPath}'");
                 }
                 if (_inProgress.ContainsKey(fromPath)) {
                     if (_inProgress[fromPath].HasFlag(args.ChangeType)) {
@@ -217,16 +209,20 @@ namespace KellySync
                     break;
                 }
                 case WatcherChangeTypes.Renamed: {
-                    var isToRemote = args.OldFullPath.Contains(new DirectoryInfo(LocalPath).FullName);
-                    var before = isToRemote ? GetRemotePath(args.OldFullPath) : GetLocalPath(args.OldFullPath);
-                    var after = isToRemote ? GetRemotePath(args.FullPath) : GetLocalPath(args.FullPath);
-                    if (File.Exists(before)) {
-                        Trace.WriteLine($"Moving File: '{before}' -> '{after}'");
-                        File.Move(before, after);
+                    var before = isRemoteEvent ? args.OldPath.LocalPath : args.OldPath.RemotePath;
+                    var after = isRemoteEvent ? args.Path.LocalPath : args.Path.RemotePath;
+
+                    if( File.Exists( before ) ) {
+
+                    }
+
+                    if( File.Exists( before ) ) {
+                        Trace.WriteLine( $"Moving File: '{before}' -> '{after}'" );
+                        File.Move( before, after );
                     } else {
-                        before = isToRemote ? toPath : fromPath;
-                        Trace.WriteLine($"Copying File: '{before}' -> '{after}'");
-                        File.Copy(before, after, true);
+                        before = isRemoteEvent ? fromPath : toPath;
+                        Trace.WriteLine( $"Copying File: '{before}' -> '{after}'" );
+                        File.Copy( before, after, true );
                     }
                     break;
                 }
