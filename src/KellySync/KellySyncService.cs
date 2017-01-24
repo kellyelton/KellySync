@@ -44,7 +44,7 @@ namespace KellySync
 			var tcs = new TaskCompletionSource<object>();
 			ThreadPool.RegisterWaitForSingleObject(_running.WaitHandle, (o, timeout) => {
 				tcs.SetResult(null);
-			}, null, TimeSpan.MaxValue, true);
+			}, null, -1, true);
 			await tcs.Task;
         }
 
