@@ -10,8 +10,13 @@ namespace KellySync
         static log4net.ILog Log = log4net.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
         static void Main( string[] args ) {
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
             Trace.Listeners.Add(new ConsoleTraceListener());
             Run().Wait();
+        }
+
+        private static void CurrentDomain_UnhandledException( object sender, UnhandledExceptionEventArgs e ) {
+            //throw new NotImplementedException();
         }
 
         static async Task Run() {
@@ -27,10 +32,10 @@ namespace KellySync
 
         static IEnumerable<FileSync> GetFileSyncs( Config config ) {
             yield return new FileSync(config, @"%USERPROFILE%\SyncTest");
-            yield return new FileSync(config, @"%USERPROFILE%\vimfiles");
-            yield return new FileSync(config, @"%USERPROFILE%", ".bashrc");
-            yield return new FileSync(config, @"%USERPROFILE%", ".gitconfig");
-            yield return new FileSync(config, @"%USERPROFILE%", ".vimrc");
+            //yield return new FileSync(config, @"%USERPROFILE%\vimfiles");
+            //yield return new FileSync(config, @"%USERPROFILE%", ".bashrc");
+            //yield return new FileSync(config, @"%USERPROFILE%", ".gitconfig");
+            //yield return new FileSync(config, @"%USERPROFILE%", ".vimrc");
         }
     }
 }

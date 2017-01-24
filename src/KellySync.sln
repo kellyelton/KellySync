@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
-VisualStudioVersion = 14.0.25402.0
+VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KellySync", "KellySync\KellySync.csproj", "{E1B28C9B-388A-4144-814E-5CEE501DAD97}"
 EndProject
@@ -13,6 +13,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "root", "root", "{7DCB1B53-A
 		..\.gitignore = ..\.gitignore
 		..\configdoc.js = ..\configdoc.js
 	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KellySync.Tests", "KellySync.Tests\KellySync.Tests.csproj", "{F44C5EC9-4D29-4922-A5BB-A9F251E7B523}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -28,6 +30,10 @@ Global
 		{20B3EED8-FCAB-4770-9776-40E2283BA746}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{20B3EED8-FCAB-4770-9776-40E2283BA746}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{20B3EED8-FCAB-4770-9776-40E2283BA746}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F44C5EC9-4D29-4922-A5BB-A9F251E7B523}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F44C5EC9-4D29-4922-A5BB-A9F251E7B523}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F44C5EC9-4D29-4922-A5BB-A9F251E7B523}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F44C5EC9-4D29-4922-A5BB-A9F251E7B523}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

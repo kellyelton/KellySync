@@ -9,10 +9,7 @@ namespace KellySync
 {
     public class FileSync : IDisposable
     {
-        public string RemotePath { get; }
-        public string LocalPath { get; }
-        public string FullRemotePath { get; }
-        public string FullLocalPath { get; }
+        public FilePath Path { get; }
 
         private IOWatcher _localHandler;
         private IOWatcher _remoteHandler;
@@ -23,9 +20,6 @@ namespace KellySync
 
         private Dictionary<string, WatcherChangeTypes> _inProgress;
 
-
-        private static readonly string HomePath = Environment.ExpandEnvironmentVariables(@"%USERPROFILE%");
-
         public FileSync( Config config, string path ) : this(config, path, null) { }
 
         public FileSync( Config config, string path, string filter ) {
@@ -33,27 +27,11 @@ namespace KellySync
             _filter = filter;
             if (string.IsNullOrWhiteSpace(_filter)) _filter = "*";
             _inProgress = new System.Collections.Generic.Dictionary<string, WatcherChangeTypes>(StringComparer.InvariantCultureIgnoreCase);
-            RemotePath = GetRemotePath(path);
-            LocalPath = GetPath(path);
+            Path = new FilePath(path, _config);
+            Path.CreateDirectories();
 
-            if (!Directory.Exists(LocalPath)) {
-                Trace.WriteLine($"Creating Directory: '{LocalPath}'");
-                Directory.CreateDirectory(LocalPath);
-            }
-            if (!Directory.Exists(RemotePath)) {
-                Trace.WriteLine($"Creating Directory: '{RemotePath}'");
-                Directory.CreateDirectory(RemotePath);
-            }
-
-            FullRemotePath = RemotePath;
-            FullLocalPath = LocalPath;
-            if (!string.IsNullOrWhiteSpace(filter)) {
-                FullRemotePath = FullRemotePath + $"\\{filter}";
-                FullLocalPath = FullLocalPath + $"\\{filter}";
-            }
-
-            _localHandler = new IOWatcher(LocalPath, filter).On(OnLocalFileEvent);
-            _remoteHandler = new IOWatcher(RemotePath, filter).On(OnRemoteFileEvent);
+            _localHandler = new IOWatcher(_config, Path.LocalPath, filter).On(OnLocalFileEvent).On(OnLocalIOEventException);
+            _remoteHandler = new IOWatcher(_config, Path.RemotePath, filter).On(OnRemoteFileEvent).On(OnRemoteIOEventException);
         }
 
         public void Start() {
@@ -86,12 +64,11 @@ namespace KellySync
                 using (var en = query.GetEnumerator()) {
                     while (en.MoveNext() && !cancel.IsCancellationRequested) {
                         // TODO: actually do scanning on file
-                        var path = en.Current;
-                        var opath = GetOppositePath(path);
+                        var path = new FilePath(en.Current, _config);
                         lock (this._inProgress) {
                             // This way we don't tickle files that are being moved
-                            if (this._inProgress.ContainsKey(path) || this._inProgress.ContainsKey(opath)) continue;
-                            SyncFile(path, GetOppositePath(path));
+                            if (this._inProgress.ContainsKey(path.OriginalPath)) continue;
+                            SyncFilePath(path, _config);
                         }
                         await Task.Delay(100, cancel);
                     }
@@ -100,55 +77,89 @@ namespace KellySync
             }
         }
 
-        private void SyncFile( string a, string b ) {
-            if (!File.Exists(a) && File.Exists(b)) {
-                File.Copy(b, a, true);
-                File.SetLastWriteTime(b, File.GetLastWriteTime(a));
-                return;
-            }
-            if (File.Exists(a) && !File.Exists(b)) {
-                File.Copy(a, b, true);
-                File.SetLastWriteTime(a, File.GetLastWriteTime(b));
-                return;
-            }
+        private void SyncFilePath( FilePath path, Config config ) {
+            if (!path.IsDirectory) {
+                if (!File.Exists(path.LocalPath) && File.Exists(path.RemotePath)) {
+                    File.Copy(path.RemotePath, path.LocalPath, true);
+                    File.SetLastWriteTime(path.RemotePath, File.GetLastWriteTime(path.LocalPath));
+                    return;
+                }
+                if (File.Exists(path.LocalPath) && !File.Exists(path.RemotePath)) {
+                    File.Copy(path.LocalPath, path.RemotePath, true);
+                    File.SetLastWriteTime(path.LocalPath, File.GetLastWriteTime(path.RemotePath));
+                    return;
+                }
 
-            var atime = File.GetLastWriteTime(a);
-            var btime = File.GetLastWriteTime(b);
+                var atime = File.GetLastWriteTime(path.LocalPath);
+                var btime = File.GetLastWriteTime(path.RemotePath);
 
-            if (atime > btime) {
-                File.Copy(a, b, true);
-                File.SetLastWriteTime(a, File.GetLastWriteTime(b));
-                return;
-            }
-            if (btime > atime) {
-                File.Copy(b, a, true);
-                File.SetLastWriteTime(b, File.GetLastWriteTime(a));
-                return;
+                if (atime > btime) {
+                    File.Copy(path.LocalPath, path.RemotePath, true);
+                    File.SetLastWriteTime(path.LocalPath, File.GetLastWriteTime(path.RemotePath));
+                    return;
+                }
+                if (btime > atime) {
+                    File.Copy(path.RemotePath, path.LocalPath, true);
+                    File.SetLastWriteTime(path.RemotePath, File.GetLastWriteTime(path.LocalPath));
+                    return;
+                }
+            } else {
+                if (!Directory.Exists(path.LocalPath) && Directory.Exists(path.RemotePath)) {
+                    Directory.CreateDirectory(path.LocalPath);
+                    Directory.SetLastWriteTime(path.RemotePath, Directory.GetLastWriteTime(path.LocalPath));
+                    return;
+                }
+                if (Directory.Exists(path.LocalPath) && !Directory.Exists(path.RemotePath)) {
+                    Directory.CreateDirectory(path.RemotePath);
+                    Directory.SetLastWriteTime(path.LocalPath, Directory.GetLastWriteTime(path.RemotePath));
+                    return;
+                }
+
+                foreach(var dir in Directory.GetDirectories(path.LocalPath)) {
+                    var fpath = new FilePath(dir, config);
+                    SyncFilePath(fpath, config);
+                }
+                foreach(var dir in Directory.GetDirectories(path.RemotePath)) {
+                    var fpath = new FilePath(dir, config);
+                    SyncFilePath(fpath, config);
+                }
+
+                foreach(var file in Directory.GetFiles(path.LocalPath)) {
+                    var fpath = new FilePath(file, config);
+                    SyncFilePath(fpath, config);
+                }
+                foreach(var file in Directory.GetFiles(path.RemotePath)) {
+                    var fpath = new FilePath(file, config);
+                    SyncFilePath(fpath, config);
+                }
+
+
+                var atime = Directory.GetLastWriteTime(path.LocalPath);
+                var btime = Directory.GetLastWriteTime(path.RemotePath);
+
+                if (atime > btime) {
+                    Directory.SetLastWriteTime(path.LocalPath, Directory.GetLastWriteTime(path.RemotePath));
+                } else if (btime > atime) {
+                    Directory.SetLastWriteTime(path.RemotePath, Directory.GetLastWriteTime(path.LocalPath));
+                }
             }
         }
 
         private void OnLocalFileEvent( object sender, IOEventArgs args ) {
-            var directory = args.FullPath;
-			// TODO this null coalesse is improper behavior for this instance, but it's just there for compile sake
-            if (args.IsDirectory ?? false) directory = Directory.GetParent(args.FullPath).FullName;
-            var toPath = GetRemotePath(directory);
-            var fromPath = directory;
-            ReplicateFileEvent(fromPath, toPath, args);
+            ReplicateFileEvent( args.Path.LocalPath, args.Path.RemotePath, false, args );
         }
 
         private void OnRemoteFileEvent( object sender, IOEventArgs args ) {
-            var toPath = GetLocalPath(args.FullPath);
-            var fromPath = args.FullPath;
-            ReplicateFileEvent(fromPath, toPath, args);
+            ReplicateFileEvent( args.Path.RemotePath, args.Path.LocalPath, true, args );
         }
 
-        private void ReplicateFileEvent( string fromPath, string toPath, IOEventArgs args ) {
+        private void ReplicateFileEvent( string fromPath, string toPath, bool isRemoteEvent, IOEventArgs args ) {
             if (disposedValue) return;
             lock (_inProgress) {
                 if (args.ChangeType == WatcherChangeTypes.Renamed) {
-                    Trace.WriteLine($"File Event: {args.ChangeType} '{args.OldFullPath}' to '{args.FullPath}'");
+                    Trace.WriteLine($"File Event: {args.ChangeType} '{args.OldPath.OriginalPath}' to '{args.Path.OriginalPath}'");
                 } else {
-                    Trace.WriteLine($"File Event: {args.ChangeType} '{args.FullPath}'");
+                    Trace.WriteLine($"File Event: {args.ChangeType} '{args.Path.OriginalPath}'");
                 }
                 if (_inProgress.ContainsKey(fromPath)) {
                     if (_inProgress[fromPath].HasFlag(args.ChangeType)) {
@@ -198,79 +209,56 @@ namespace KellySync
                     break;
                 }
                 case WatcherChangeTypes.Renamed: {
-                    var isToRemote = args.OldFullPath.Contains(new DirectoryInfo(LocalPath).FullName);
-                    var before = isToRemote ? GetRemotePath(args.OldFullPath) : GetLocalPath(args.OldFullPath);
-                    var after = isToRemote ? GetRemotePath(args.FullPath) : GetLocalPath(args.FullPath);
-                    if (File.Exists(before)) {
-                        Trace.WriteLine($"Moving File: '{before}' -> '{after}'");
-                        File.Move(before, after);
+                    var before = isRemoteEvent ? args.OldPath.LocalPath : args.OldPath.RemotePath;
+                    var after = isRemoteEvent ? args.Path.LocalPath : args.Path.RemotePath;
+
+                    if( File.Exists( before ) ) {
+
+                    }
+
+                    if( File.Exists( before ) ) {
+                        Trace.WriteLine( $"Moving File: '{before}' -> '{after}'" );
+                        File.Move( before, after );
                     } else {
-                        before = isToRemote ? toPath : fromPath;
-                        Trace.WriteLine($"Copying File: '{before}' -> '{after}'");
-                        File.Copy(before, after, true);
+                        before = isRemoteEvent ? fromPath : toPath;
+                        Trace.WriteLine( $"Copying File: '{before}' -> '{after}'" );
+                        File.Copy( before, after, true );
                     }
                     break;
                 }
             }
         }
 
+        private void OnLocalIOEventException( object sender, IOEventException args ) {
+            Exception ex = args.InnerException;
+            string nl = Environment.NewLine;
+            FileSystemEventArgs fa = args.FileSystemArgs;
+
+            Trace.TraceError( $"Local IO [{fa.FullPath}:{fa.ChangeType}] {ex.Message}{nl}{ex.StackTrace}" );
+        }
+
+        private void OnRemoteIOEventException( object sender, IOEventException args ) {
+            Exception ex = args.InnerException;
+            string nl = Environment.NewLine;
+            FileSystemEventArgs fa = args.FileSystemArgs;
+
+            Trace.TraceError( $"Remote IO [{fa.FullPath}:{fa.ChangeType}] {ex.Message}{nl}{ex.StackTrace}" );
+        }
+
         private IEnumerable<string> GetPathsToScan() {
-            if (!this._filter.Contains("*")) {
+            if (!string.IsNullOrWhiteSpace(_filter) && !this._filter.Contains("*")) {
                 // If it's just a file, then return just the Local and Remote paths
-                yield return this.FullRemotePath;
-                yield return this.FullLocalPath;
+                yield return this.Path.RemotePath;
+                yield return this.Path.LocalPath;
             } else {
                 // If it's a directory, use GetFiles(filter) on the Local and Remote paths
-                foreach (var file in Directory.GetFiles(this.RemotePath, this._filter)) {
+                foreach (var file in Directory.GetFiles(this.Path.RemotePath, this._filter)) {
                     yield return file;
                 }
-                foreach (var file in Directory.GetFiles(this.LocalPath, this._filter)) {
+                foreach (var file in Directory.GetFiles(this.Path.LocalPath, this._filter)) {
                     yield return file;
                 }
             }
-        }
-
-        private string GetOppositePath( string fullPath ) {
-            if (fullPath.Contains(this.RemotePath))
-                return GetLocalPath(fullPath);
-            return GetRemotePath(fullPath);
-        }
-
-        private string GetRemotePath( string fullPath ) {
-            return Path.Combine(GetPath(_config.FileDumpPath), Slashify(GetPath(fullPath)));
-        }
-        private string GetLocalPath( string fullPath ) {
-            var path = fullPath.Replace(GetPath(_config.FileDumpPath), "");
-            path = path.Substring(1);
-            path = path.Insert(1, ":");
-            return path;
-        }
-
-        private static string GetPath( string path ) {
-            if (string.IsNullOrWhiteSpace(path)) throw new ArgumentNullException(nameof(path));
-            var ret = path;
-
-            try {
-                // Remove ending slash
-                ret = ret.TrimEnd('\\', '/');
-
-                // ~ for home
-                ret = ret.Replace("~", HomePath);
-
-                // Expand env vars
-                ret = Environment.ExpandEnvironmentVariables(ret);
-
-                if (!System.IO.Path.IsPathRooted(ret))
-                    throw new FormatException($"No root defined for path '{path}'.");
-
-                return ret;
-            } catch (Exception ex) {
-                throw new FormatException($"Can't resolve path: '{path}' -> '{ret}'", ex);
-            }
-        }
-
-        private static string Slashify( string path ) {
-            return new DirectoryInfo(path).FullName.Replace(":", "");
         }
 
         #region IDisposable Support
